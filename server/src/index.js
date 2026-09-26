@@ -13,4 +13,4 @@ if (process.env.MONGODB_URI) {
     process.exit(1);
   }
 }
-app.listen(port, () => console.log(`StockSense API: http://localhost:${port}/api (${app.locals.mode})`));
+app.listen(port, '0.0.0.0', () => console.log(`StockSense API: http://localhost:${port}/api (${app.locals.mode})`));
