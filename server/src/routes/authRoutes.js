@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import * as auth from '../controllers/authController.js';
+import { authenticate } from '../middleware/authenticate.js';
+export const authRoutes = Router();
+authRoutes.post('/signup', auth.signup);
+authRoutes.post('/login', auth.login);
+authRoutes.post('/forgot-password', auth.requestOtp);
+authRoutes.post('/verify-otp', auth.verifyOtp);
+authRoutes.post('/reset-password', auth.resetPassword);
+authRoutes.get('/me', authenticate, auth.me);
+authRoutes.put('/me', authenticate, auth.profile);
+authRoutes.post('/logout', authenticate, auth.logout);

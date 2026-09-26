@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import * as warehouses from '../controllers/warehouseController.js';
+import * as locations from '../controllers/locationController.js';
+export const settingsRoutes = Router();
+settingsRoutes.get('/warehouses', warehouses.list);
+settingsRoutes.post('/warehouses', warehouses.create);
+settingsRoutes.put('/warehouses/:id', warehouses.update);
+settingsRoutes.get('/locations', locations.list);
+settingsRoutes.post('/locations', locations.create);
+settingsRoutes.put('/locations/:id', locations.update);
