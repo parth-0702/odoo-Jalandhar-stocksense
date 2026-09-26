@@ -9,3 +9,5 @@ export const profile = asyncHandler(async (req, res) => res.json(await auth.prof
 export const requestOtp = asyncHandler(async (req, res) => res.json(await auth.requestOtp(req.body)));
 export const verifyOtp = asyncHandler(async (req, res) => res.json(await auth.verifyOtp(req.body)));
 export const resetPassword = asyncHandler(async (req, res) => res.json(await auth.resetPassword(req.body)));
+export const team = asyncHandler(async (req, res) => res.json(await auth.team(req.user)));
+export const setRole = asyncHandler(async (req, res) => res.json(await auth.setRole(req.user, req.params.id, req.body.role)));

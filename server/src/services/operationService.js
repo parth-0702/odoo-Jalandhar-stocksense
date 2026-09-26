@@ -51,7 +51,7 @@ export function createOperationService(repo, { stock, reference, mutations }) {
       values.responsible = doc.responsible;
       return enrich(await repo.update('documents', id, values));
     },
-    async transition(type, id, action) {
+    async transition(type, id, action, user) {
       return repo.transaction(async () => {
         const doc = find('documents', id);
         ensure(doc.type === type, 'Document not found.', 404);
@@ -66,9 +66,22 @@ export function createOperationService(repo, { stock, reference, mutations }) {
           ensure(doc.type === 'Delivery' && doc.status === 'Waiting', 'Availability check is only available for Waiting deliveries.');
           ensure(!enrich(doc).lines.some(l => l.insufficientStock), 'Still waiting for stock.');
           doc.status = 'Ready';
+        } else if (action === 'pick') {
+          ensure(doc.type === 'Delivery' && doc.status === 'Ready', 'Pick items when the delivery is Ready.');
+          ensure(!doc.pickedAt, 'Items have already been picked.');
+          ensure(!enrich(doc).lines.some(l => l.insufficientStock), 'Insufficient stock. Replenish the source location before picking.');
+          doc.pickedAt = new Date().toISOString(); doc.pickedBy = user?.id || doc.responsible;
+        } else if (action === 'pack') {
+          ensure(doc.type === 'Delivery' && doc.status === 'Ready' && doc.pickedAt, 'Pick the items before packing.');
+          ensure(!doc.packedAt, 'Items have already been packed.');
+          doc.packedAt = new Date().toISOString(); doc.packedBy = user?.id || doc.responsible;
         } else if (action === 'validate') {
           ensure(doc.status === 'Ready', 'Validate is only available in Ready.');
           ensure(!enrich(doc).lines.some(l => l.insufficientStock), 'Insufficient stock. Receive stock before validating.');
+          if (doc.type === 'Delivery') {
+            doc.pickedAt = doc.pickedAt || new Date().toISOString();
+            doc.packedAt = doc.packedAt || new Date().toISOString();
+          }
           for (const line of doc.lines) {
             if (doc.type === 'Receipt') await mutations.writeStock(line.product, doc.toLocation, line.quantity, doc);
             if (doc.type === 'Delivery') await mutations.writeStock(line.product, doc.fromLocation, -line.quantity, doc);

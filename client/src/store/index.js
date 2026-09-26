@@ -1,7 +1,7 @@
 import { configureStore, createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { api } from '../api/client';
 export const loadCatalog = createAsyncThunk('catalog/load', async () => {
-  const [products, warehouses, locations] = await Promise.all(['products', 'warehouses', 'locations'].map(path => api.get(`/${path}`)));
+  const [products, warehouses, locations] = await Promise.all(['products', 'warehouses', 'locations'].map(path => api.get(`/${path}`, { background: true })));
   return { products: products.data, warehouses: warehouses.data, locations: locations.data };
 });
 const authSlice = createSlice({ name: 'auth', initialState: { user: null, checked: false }, reducers: {

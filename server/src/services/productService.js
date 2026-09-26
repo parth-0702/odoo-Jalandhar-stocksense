@@ -22,5 +22,13 @@ export function createProductService(repo, stock, manualStock) {
         return product;
       });
     },
+    async removeProduct(id) {
+      findRecord(repo, 'products', id);
+      return repo.transaction(async () => {
+        repo.deleteWhere('products', p => p.id === id);
+        repo.deleteWhere('stock', s => s.productRef === id);
+        return { message: 'Product removed successfully.' };
+      });
+    },
   };
 }
