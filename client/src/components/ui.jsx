@@ -1,5 +1,6 @@
 import { Package, Plus, Search, ArrowUpRight, X, LayoutGrid, List, AlertCircle, LoaderCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { DataSkeleton } from './LoadingFeedback';
 export const money = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 export const date = value => value ? new Date(value.length === 10 ? `${value}T00:00:00` : value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 export const today = () => new Date().toLocaleDateString('en-CA');
@@ -10,7 +11,7 @@ export function Field({ label, children, required, hint }) { return <label class
 export function SearchBox({ value, onChange, placeholder = 'Search by Reference or Contact…' }) { return <div className="search-box"><Search size={16}/><input aria-label={placeholder} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}/></div>; }
 export function ViewToggle({ view, setView }) { return <div className="view-toggle"><button aria-label="List View" title="List View" className={view === 'list' ? 'selected' : ''} onClick={() => setView('list')}><List size={18}/></button><button aria-label="Kanban View" title="Kanban View" className={view === 'kanban' ? 'selected' : ''} onClick={() => setView('kanban')}><LayoutGrid size={17}/></button></div>; }
 export function Alert({ children, success = false }) { return children ? <div role={success ? 'status' : 'alert'} className={`alert ${success ? 'success' : ''}`}><AlertCircle size={17}/><span>{children}</span></div> : null; }
-export function Loading() { return <div className="empty"><LoaderCircle className="spin" size={25}/><p>Loading your workspace…</p></div>; }
+export function Loading() { return <DataSkeleton/>; }
 export function Empty({ title = 'No records found', text = 'Try another filter or create your first record.' }) { return <div className="empty"><Package size={32}/><h3>{title}</h3><p>{text}</p></div>; }
 export function Modal({ title, children, onClose }) { return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={20}/></button></header>{children}</section></div>; }
 export function Table({ columns, rows, renderRow }) { return <div className="table-wrap"><table><thead><tr>{columns.map(c => <th key={c}>{c}</th>)}</tr></thead><tbody>{rows.map(renderRow)}</tbody></table>{!rows.length && <Empty/>}</div>; }

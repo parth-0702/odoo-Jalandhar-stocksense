@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomUUID, randomInt } from 'node:crypto';
 import { ensure } from '../utils/errors.js';
+import { STAFF, ROLES, MANAGER, requireManager } from '../domain/permissions.js';
 const ROUNDS = 8;
 const secret = () => process.env.JWT_SECRET || 'stocksense-dev-secret';
 export const publicUser = ({ passwordHash, ...user }) => user;
@@ -22,7 +23,7 @@ export function createAuthService(repo) {
       ensure(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), 'Enter a valid email address.');
       ensure(!repo.all('users').some(u => u.email === email), 'Email already exists.');
       validatePassword(password); ensure(password === confirmPassword, 'Passwords do not match.'); uniquePassword(password);
-      return publicUser(await repo.insert('users', { loginId, email, passwordHash: hashPassword(password), name: name?.trim() || loginId, role: 'Inventory Manager' }));
+      return publicUser(await repo.insert('users', { loginId, email, passwordHash: hashPassword(password), name: name?.trim() || loginId, role: STAFF }));
     },
     async login({ loginId, password }) {
       const user = repo.all('users').find(u => u.loginId.toLowerCase() === String(loginId || '').trim().toLowerCase());
@@ -68,6 +69,17 @@ export function createAuthService(repo) {
         await repo.deleteWhere('resets', r => r.id === reset.id);
         await repo.deleteWhere('sessions', s => s.userId === reset.userId);
         return { message: 'Password updated. Sign in with your new password.' };
+      });
+    },
+    team(user) { requireManager(user); return repo.all('users').map(publicUser); },
+    async setRole(user, id, role) {
+      requireManager(user);
+      ensure(ROLES.includes(role), 'Select Inventory Manager or Warehouse Staff.');
+      return repo.transaction(async () => {
+        const account = repo.get('users', id); ensure(account, 'User not found.', 404);
+        ensure(account.id !== user.id, 'Ask another manager to change your own role.');
+        ensure(!(account.role === MANAGER && role !== MANAGER && repo.all('users').filter(u => u.role === MANAGER).length <= 1), 'Keep at least one Inventory Manager.');
+        return publicUser(await repo.update('users', id, { role }));
       });
     },
     async profile(user, { name, email }) {

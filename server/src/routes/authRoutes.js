@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as auth from '../controllers/authController.js';
 import { authenticate } from '../middleware/authenticate.js';
+import { managerOnly } from '../middleware/authorize.js';
 export const authRoutes = Router();
 authRoutes.post('/signup', auth.signup);
 authRoutes.post('/login', auth.login);
@@ -10,3 +11,5 @@ authRoutes.post('/reset-password', auth.resetPassword);
 authRoutes.get('/me', authenticate, auth.me);
 authRoutes.put('/me', authenticate, auth.profile);
 authRoutes.post('/logout', authenticate, auth.logout);
+authRoutes.get('/team', authenticate, managerOnly, auth.team);
+authRoutes.put('/team/:id/role', authenticate, managerOnly, auth.setRole);

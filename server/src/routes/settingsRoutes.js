@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import * as warehouses from '../controllers/warehouseController.js';
 import * as locations from '../controllers/locationController.js';
+import { managerOnly } from '../middleware/authorize.js';
 export const settingsRoutes = Router();
 settingsRoutes.get('/warehouses', warehouses.list);
-settingsRoutes.post('/warehouses', warehouses.create);
-settingsRoutes.put('/warehouses/:id', warehouses.update);
+settingsRoutes.post('/warehouses', managerOnly, warehouses.create);
+settingsRoutes.put('/warehouses/:id', managerOnly, warehouses.update);
 settingsRoutes.get('/locations', locations.list);
-settingsRoutes.post('/locations', locations.create);
-settingsRoutes.put('/locations/:id', locations.update);
+settingsRoutes.post('/locations', managerOnly, locations.create);
+settingsRoutes.put('/locations/:id', managerOnly, locations.update);

@@ -1,15 +1,193 @@
+import { isManager } from '../config/permissions';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { Trash2 } from 'lucide-react';
 import { api, errorMessage } from '../api/client';
 import { loadCatalog } from '../store';
-import { Alert, Badge, Field, Loading, PageHeader, Table } from '../components/ui';
+import { Alert, Badge, Field, Loading, PageHeader, Table, Modal } from '../components/ui';
+
 export default function ProductDetailPage() {
+  const manager = isManager(useSelector(s => s.auth.user));
   const { id } = useParams(), navigate = useNavigate(), dispatch = useDispatch();
   const { locations, warehouses } = useSelector(s => s.catalog);
   const [form, setForm] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  useEffect(() => { let active = true; setForm(null); setError(''); if (id) api.get(`/products/${id}`).then(r => { if (active) setForm(r.data); }).catch(e => { if (active) setError(errorMessage(e)); }); else setForm({ name: '', sku: '', category: '', unitOfMeasure: 'Pcs', perUnitCost: 0, reorderThreshold: 0, initialStock: 0, locationRef: '', description: '' }); return () => { active = false; }; }, [id]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setForm(null);
+    setError('');
+    if (id) {
+      api.get(`/products/${id}`)
+        .then(r => { if (active) setForm(r.data); })
+        .catch(e => { if (active) setError(errorMessage(e)); });
+    } else {
+      setForm({ name: '', sku: '', category: '', unitOfMeasure: 'Pcs', perUnitCost: 0, reorderThreshold: 0, initialStock: 0, locationRef: '', description: '' });
+    }
+    return () => { active = false; };
+  }, [id]);
+
   const field = key => e => setForm({ ...form, [key]: e.target.value });
-  async function save(e) { e.preventDefault(); setBusy(true); setError(''); try { await api[id ? 'put' : 'post'](`/products${id ? `/${id}` : ''}`, form); dispatch(loadCatalog()); navigate('/products'); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } }
-  return <><PageHeader title={id ? 'Edit Product' : 'Create Product'} subtitle="Give every item a home in your inventory."/><Alert>{error}</Alert>{!form ? !error && <Loading/> : <section className="panel detail-panel"><form onSubmit={save}><div className="form-section"><h2>Product information</h2><div className="form-grid">{[['name', 'Product Name'], ['sku', 'SKU / Code'], ['category', 'Category'], ['unitOfMeasure', 'Unit of Measure']].map(([key, label]) => <Field label={label} required key={key}><input required value={form[key]} onChange={field(key)} list={key === 'category' ? 'categories' : key === 'unitOfMeasure' ? 'units' : undefined}/></Field>)}<datalist id="categories">{['Raw Material','Furniture','Finished Goods'].map(c => <option key={c}>{c}</option>)}</datalist><datalist id="units">{['Pcs','Kg','Bag','Litre','Meter'].map(c => <option key={c}>{c}</option>)}</datalist><Field label="Per Unit Cost (₹)" required><input required type="number" min="0" step="any" value={form.perUnitCost} onChange={field('perUnitCost')}/></Field><Field label="Reordering Rule (Optional)" hint="Alert when on-hand stock reaches this threshold."><input type="number" min="0" step="any" value={form.reorderThreshold} onChange={field('reorderThreshold')}/></Field>{!id && <><Field label="Initial Stock (Optional)"><input type="number" min="0" step="any" value={form.initialStock} onChange={field('initialStock')}/></Field><Field label="Initial Stock Location" required={Number(form.initialStock) > 0}><select value={form.locationRef} required={Number(form.initialStock) > 0} onChange={field('locationRef')}><option value="">Select location</option>{locations.map(l => <option value={l.id} key={l.id}>{warehouses.find(w => w.id === l.warehouseRef)?.shortCode}/{l.name}</option>)}</select></Field></>}</div><Field label="Description"><textarea rows={4} value={form.description} onChange={field('description')} placeholder="Add product details…"/></Field></div>{id && <div className="form-section"><h2>Stock by location</h2><Table columns={['Warehouse / Location', 'On Hand', 'Free to Use', 'Status']} rows={form.stock || []} renderRow={s => { const location = locations.find(l => l.id === s.locationRef); const stockStatus = s.onHand === 0 ? 'Out of Stock' : s.onHand <= Number(form.reorderThreshold) ? 'Low Stock' : 'In Stock'; return <tr key={s.id} className={stockStatus === 'Low Stock' ? 'stock-low' : stockStatus === 'Out of Stock' ? 'stock-out' : ''}><td>{warehouses.find(w => w.id === location?.warehouseRef)?.shortCode || '—'} / {location?.name || s.locationRef}</td><td>{s.onHand}</td><td>{s.freeToUse}</td><td><Badge>{stockStatus}</Badge></td></tr>; }}/><p className="muted">Update counts directly from the Products / Stock page.</p></div>}<footer className="form-footer"><Link className="button" to="/products">Cancel</Link><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save Product'}</button></footer></form></section>}</>;
+
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api[id ? 'put' : 'post'](`/products${id ? `/${id}` : ''}`, form);
+      dispatch(loadCatalog());
+      navigate('/products');
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.delete(`/products/${id}`);
+      dispatch(loadCatalog());
+      navigate('/products');
+    } catch (e) {
+      setError(errorMessage(e));
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={id ? (manager ? 'Edit Product' : 'Product Details') : 'Create Product'}
+        subtitle="Give every item a home in your inventory."
+      />
+      <Alert>{error}</Alert>
+      {!form ? (
+        !error && <Loading />
+      ) : (
+        <section className="panel detail-panel">
+          <form onSubmit={save}>
+            <fieldset disabled={!manager || busy} className="form-section">
+              <h2>Product information</h2>
+              <div className="form-grid">
+                {[
+                  ['name', 'Product Name'],
+                  ['sku', 'SKU / Code'],
+                  ['category', 'Category'],
+                  ['unitOfMeasure', 'Unit of Measure'],
+                ].map(([key, label]) => (
+                  <Field label={label} required key={key}>
+                    <input
+                      required
+                      value={form[key]}
+                      onChange={field(key)}
+                      list={key === 'category' ? 'categories' : key === 'unitOfMeasure' ? 'units' : undefined}
+                    />
+                  </Field>
+                ))}
+                <datalist id="categories">
+                  {['Raw Material', 'Furniture', 'Finished Goods', 'Packaging', 'Hardware', 'Electronics'].map(c => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </datalist>
+                <datalist id="units">
+                  {['Pcs', 'Kg', 'Bag', 'Litre', 'Meter', 'Box'].map(c => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </datalist>
+                <Field label="Per Unit Cost (₹)" required>
+                  <input required type="number" min="0" step="any" value={form.perUnitCost} onChange={field('perUnitCost')} />
+                </Field>
+                <Field label="Reordering Rule (Optional)" hint="Alert when on-hand stock reaches this threshold.">
+                  <input type="number" min="0" step="any" value={form.reorderThreshold} onChange={field('reorderThreshold')} />
+                </Field>
+                {!id && (
+                  <>
+                    <Field label="Initial Stock (Optional)">
+                      <input type="number" min="0" step="any" value={form.initialStock} onChange={field('initialStock')} />
+                    </Field>
+                    <Field label="Initial Stock Location" required={Number(form.initialStock) > 0}>
+                      <select value={form.locationRef} required={Number(form.initialStock) > 0} onChange={field('locationRef')}>
+                        <option value="">Select location</option>
+                        {locations.map(l => (
+                          <option value={l.id} key={l.id}>
+                            {warehouses.find(w => w.id === l.warehouseRef)?.shortCode}/{l.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </>
+                )}
+              </div>
+              <Field label="Description">
+                <textarea rows={4} value={form.description} onChange={field('description')} placeholder="Add product details…" />
+              </Field>
+            </fieldset>
+            {id && (
+              <div className="form-section">
+                <h2>Stock by location</h2>
+                <Table
+                  columns={['Warehouse / Location', 'On Hand', 'Free to Use', 'Status']}
+                  rows={form.stock || []}
+                  renderRow={s => {
+                    const location = locations.find(l => l.id === s.locationRef);
+                    const stockStatus = s.onHand === 0 ? 'Out of Stock' : s.onHand <= Number(form.reorderThreshold) ? 'Low Stock' : 'In Stock';
+                    return (
+                      <tr key={s.id} className={stockStatus === 'Low Stock' ? 'stock-low' : stockStatus === 'Out of Stock' ? 'stock-out' : ''}>
+                        <td>{warehouses.find(w => w.id === location?.warehouseRef)?.shortCode || '—'} / {location?.name || s.locationRef}</td>
+                        <td>{s.onHand}</td>
+                        <td>{s.freeToUse}</td>
+                        <td><Badge>{stockStatus}</Badge></td>
+                      </tr>
+                    );
+                  }}
+                />
+                <p className="muted">Update counts directly from the Products / Stock page.</p>
+              </div>
+            )}
+            <footer className="form-footer">
+              {id && manager && (
+                <button
+                  type="button"
+                  className="button danger-quiet"
+                  style={{ marginRight: 'auto' }}
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={busy}
+                >
+                  <Trash2 size={16} /> Delete Product
+                </button>
+              )}
+              <Link className="button" to="/products">Cancel</Link>
+              {manager && (
+                <button className="button primary" disabled={busy}>
+                  {busy ? 'Saving…' : 'Save Product'}
+                </button>
+              )}
+            </footer>
+          </form>
+        </section>
+      )}
+
+      {confirmDelete && (
+        <Modal title="Delete Product" onClose={() => setConfirmDelete(false)}>
+          <div style={{ padding: '20px 24px' }}>
+            <p style={{ fontSize: '14px', color: '#475569', marginBottom: '20px' }}>
+              Are you sure you want to remove <strong>{form?.name}</strong> (`{form?.sku}`)? This action cannot be undone.
+            </p>
+            <div className="form-footer" style={{ margin: '0 -24px -20px', padding: '16px 24px' }}>
+              <button type="button" className="button" onClick={() => setConfirmDelete(false)}>Cancel</button>
+              <button type="button" className="button" style={{ background: '#dc2626', color: '#fff', borderColor: '#dc2626' }} onClick={handleDelete} disabled={busy}>
+                {busy ? 'Deleting…' : 'Yes, Delete Product'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
 }

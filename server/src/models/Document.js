@@ -15,5 +15,9 @@ const schema = new mongoose.Schema({
   operationType: String,
   notes: String,
   completedAt: String,
+  pickedAt: String,
+  pickedBy: String,
+  packedAt: String,
+  packedBy: String,
 }, { timestamps: true });
 export default mongoose.model('Document', schema);

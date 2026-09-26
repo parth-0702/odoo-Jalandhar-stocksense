@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import * as products from '../controllers/productController.js';
+import { managerOnly } from '../middleware/authorize.js';
 export const productRoutes = Router();
 productRoutes.get('/', products.list);
-productRoutes.post('/', products.create);
+productRoutes.post('/', managerOnly, products.create);
 productRoutes.get('/:id', products.detail);
-productRoutes.put('/:id', products.update);
+productRoutes.put('/:id', managerOnly, products.update);
+productRoutes.delete('/:id', managerOnly, products.remove);
 productRoutes.post('/:id/stock', products.stock);

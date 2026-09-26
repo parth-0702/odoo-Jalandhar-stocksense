@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Product from '../models/Product.js';
@@ -37,18 +38,18 @@ function plain(value) {
   return value;
 }
 
-export async function loadCache() {
+export async function loadCache(session = null) {
   const [users, sessions, resets, products, warehouses, locations, stock, documents, ledger, counters] = await Promise.all([
-    User.find().select('+passwordHash').lean(),
-    Session.find().lean(),
-    PasswordReset.find().lean(),
-    Product.find().lean(),
-    Warehouse.find().lean(),
-    Location.find().lean(),
-    StockQuantity.find().lean(),
-    Document.find().lean(),
-    Ledger.find().lean(),
-    Counter.find().lean(),
+    User.find().select('+passwordHash').session(session).lean(),
+    Session.find().session(session).lean(),
+    PasswordReset.find().session(session).lean(),
+    Product.find().session(session).lean(),
+    Warehouse.find().session(session).lean(),
+    Location.find().session(session).lean(),
+    StockQuantity.find().session(session).lean(),
+    Document.find().session(session).lean(),
+    Ledger.find().session(session).lean(),
+    Counter.find().session(session).lean(),
   ]);
   return {
     users: users.map(plain), sessions: sessions.map(plain), resets: resets.map(plain), products: products.map(plain),
@@ -58,71 +59,71 @@ export async function loadCache() {
 }
 
 export class MongoRepository {
-  constructor(cache) { this.cache = cache; this.depth = 0; this.session = null; this.tail = Promise.resolve(); }
+  constructor(cache) { this.cache = cache; this.context = new AsyncLocalStorage(); this.tail = Promise.resolve(); }
   enqueue(fn) {
     const run = this.tail.then(fn, fn);
     this.tail = run.then(() => undefined, () => undefined);
     return run;
   }
-  all(collection) { return this.cache[collection]; }
+  current() { return this.context.getStore()?.data || this.cache; }
+  all(collection) { return this.current()[collection]; }
   get(collection, id) { return this.all(collection).find(item => item.id === id); }
   insert(collection, values) {
+    if (!this.context.getStore()) return this.transaction(() => this.insert(collection, values));
     const item = { ...values, id: randomUUID() };
     this.all(collection).push(item);
-    return this.depth ? item : this.enqueue(async () => { await this.flush(); return item; });
+    return item;
   }
   update(collection, id, values) {
+    if (!this.context.getStore()) return this.transaction(() => this.update(collection, id, values));
     const item = this.get(collection, id);
     if (item) Object.assign(item, values);
-    return this.depth || !item ? item : this.enqueue(async () => { await this.flush(); return item; });
+    return item;
   }
   deleteWhere(collection, predicate) {
-    this.cache[collection] = this.all(collection).filter(item => !predicate(item));
-    if (this.depth === 0) return this.enqueue(async () => { await this.flush(); });
+    if (!this.context.getStore()) return this.transaction(() => this.deleteWhere(collection, predicate));
+    this.current()[collection] = this.all(collection).filter(item => !predicate(item));
   }
   async nextReference(prefix) {
-    if (this.session) {
-      const counter = await Counter.findOneAndUpdate({ prefix }, { $inc: { sequence: 1 } }, { new: true, upsert: true, session: this.session, setDefaultsOnInsert: true });
-      this.cache.counters[prefix] = counter.sequence;
-      return `${prefix}/${String(counter.sequence).padStart(4, '0')}`;
-    }
-    const value = (this.cache.counters[prefix] ?? 0) + 1;
-    this.cache.counters[prefix] = value;
-    const reference = `${prefix}/${String(value).padStart(4, '0')}`;
-    if (this.depth === 0) await this.enqueue(() => this.flush(null, { includeCounters: true }));
-    return reference;
+    if (!this.context.getStore()) return this.transaction(() => this.nextReference(prefix));
+    const { session } = this.context.getStore();
+    const counter = await Counter.findOneAndUpdate({ prefix }, { $inc: { sequence: 1 } }, { new: true, upsert: true, session, setDefaultsOnInsert: true });
+    this.current().counters[prefix] = counter.sequence;
+    return `${prefix}/${String(counter.sequence).padStart(4, '0')}`;
   }
-  async flush(session, { includeCounters = false } = {}) {
+  async flush(session, { includeCounters = false, baseline = {} } = {}) {
     const options = session ? { session } : {};
     for (const [key, Model] of COLLECTIONS) {
-      await Model.deleteMany({}, options);
-      if (this.cache[key]?.length) await Model.insertMany(structuredClone(this.cache[key]), options);
+      const before = new Map((baseline[key] || []).map(row => [row.id, row]));
+      const rows = this.current()[key] || [];
+      const remaining = new Set(rows.map(row => row.id));
+      const writes = rows.filter(row => JSON.stringify(row) !== JSON.stringify(before.get(row.id))).map(row => ({ replaceOne: { filter: { id: row.id }, replacement: structuredClone(row), upsert: true } }));
+      for (const id of before.keys()) if (!remaining.has(id)) writes.push({ deleteOne: { filter: { id } } });
+      if (writes.length) await Model.bulkWrite(writes, options);
     }
     if (!includeCounters) return;
-    await Counter.deleteMany({}, options);
-    const counters = Object.entries(this.cache.counters || {}).map(([prefix, sequence]) => ({ prefix, sequence }));
-    if (counters.length) await Counter.insertMany(counters, options);
+    const counters = Object.entries(this.current().counters || {}).map(([prefix, sequence]) => ({ updateOne: { filter: { prefix }, update: { $max: { sequence } }, upsert: true } }));
+    if (counters.length) await Counter.bulkWrite(counters, options);
   }
   transaction(action) {
-    if (this.depth > 0) return action();
+    if (this.context.getStore()) return action();
     return this.enqueue(async () => {
-      const backup = structuredClone(this.cache);
       const session = await mongoose.startSession();
-      this.session = session;
-      this.depth++;
       try {
-        session.startTransaction();
-        const result = await action();
-        await this.flush(session);
-        await session.commitTransaction();
+        let committed;
+        const result = await session.withTransaction(async () => {
+          const baseline = await loadCache(session);
+          const data = structuredClone(baseline);
+          return this.context.run({ data, session }, async () => {
+            const value = await action();
+            await this.flush(session, { baseline });
+            committed = data;
+            return value;
+          });
+        });
+        this.cache = committed;
         return result;
-      } catch (error) {
-        if (session.inTransaction()) await session.abortTransaction();
-        this.cache = backup;
-        throw error;
       } finally {
-        this.depth--;
-        this.session = null;
         await session.endSession();
       }
     });
