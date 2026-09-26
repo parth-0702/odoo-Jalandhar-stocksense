@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 export const money = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 export const date = value => value ? new Date(value.length === 10 ? `${value}T00:00:00` : value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 export const today = () => new Date().toLocaleDateString('en-CA');
-export function Logo() { return <Link to="/" className="logo"><span className="logo-mark"><Package size={25}/></span><span>Stock<span className="text-blue-600">Sense</span><small>INVENTORY MANAGEMENT</small></span></Link>; }
+export function Logo() { return <Link to="/" className="logo"><span className="logo-mark"><Package size={25}/></span><span>Stock<span className="text-blue-600">Sense</span><small>Smart inventory. Total Control.</small></span></Link>; }
 export function Badge({ children }) { return <span className={`badge badge-${String(children).toLowerCase().replaceAll(' ', '-')}`}>{children}</span>; }
 export function PageHeader({ title, subtitle, action, to, onClick }) { return <div className="page-heading"><div><div className="eyebrow">WORKSPACE / {title.toUpperCase()}</div><h1>{title}</h1><p>{subtitle}</p></div>{action && (to ? <Link className="button primary" to={to}><Plus size={16}/>{action}</Link> : <button className="button primary" onClick={onClick}><Plus size={16}/>{action}</button>)}</div>; }
 export function Field({ label, children, required, hint }) { return <label className="field"><span>{label}{required && <i> *</i>}</span>{children}{hint && <small>{hint}</small>}</label>; }
