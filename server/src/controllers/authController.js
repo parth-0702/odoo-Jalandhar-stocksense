@@ -1,0 +1,10 @@
+import { auth } from '../services/index.js';
+import { publicUser } from '../services/authService.js';
+export const signup = (req, res) => res.status(201).json(auth.signup(req.body));
+export const login = (req, res) => res.json(auth.login(req.body));
+export const logout = (req, res) => { auth.logout(req.token); res.json({ message: 'Signed out.' }); };
+export const me = (req, res) => res.json(publicUser(req.user));
+export const profile = (req, res) => res.json(auth.profile(req.user, req.body));
+export const requestOtp = (req, res) => res.json(auth.requestOtp(req.body));
+export const verifyOtp = (req, res) => res.json(auth.verifyOtp(req.body));
+export const resetPassword = (req, res) => res.json(auth.resetPassword(req.body));

@@ -1,0 +1,10 @@
+import express from 'express';
+import cors from 'cors';
+import { api } from './routes/index.js';
+export const app = express();
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
+app.use(express.json({ limit: '1mb' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', mode: 'mock' }));
+app.use('/api', api);
+app.use((req, res) => res.status(404).json({ message: 'Endpoint not found.' }));
+app.use((error, req, res, next) => { if (!error.status || error.status >= 500) console.error(error); res.status(error.status || 500).json({ message: error.status ? error.message : 'An unexpected server error occurred.' }); });
