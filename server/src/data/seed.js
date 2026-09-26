@@ -1,4 +1,6 @@
+import { hashPassword } from '../services/authService.js';
 const day = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString('en-CA'); };
+const adminPasswordHash = hashPassword('StockSense@123');
 export function seedData() {
   const products = [
     ['p1', 'Steel Rods', 'SR-001', 'Raw Material', 'Kg', 85, 100],
@@ -9,7 +11,7 @@ export function seedData() {
     ['p6', 'Standing Desk', 'DS-006', 'Furniture', 'Pcs', 12500, 10],
   ].map(([id, name, sku, category, unitOfMeasure, perUnitCost, reorderThreshold]) => ({ id, name, sku, category, unitOfMeasure, perUnitCost, reorderThreshold, description: '' }));
   return {
-    users: [{ id: 'u1', loginId: 'admin01', email: 'admin@stocksense.local', name: 'Alex Morgan', role: 'Inventory Manager', passwordHash: 'mock:StockSense@123' }],
+    users: [{ id: 'u1', loginId: 'admin01', email: 'admin@stocksense.local', name: 'Alex Morgan', role: 'Inventory Manager', passwordHash: adminPasswordHash }],
     sessions: [], resets: [], products,
     warehouses: [{ id: 'w1', name: 'Main Warehouse', shortCode: 'WH', address: 'Industrial Area, Jalandhar, Punjab' }, { id: 'w2', name: 'Production Hub', shortCode: 'PH', address: 'Focal Point, Jalandhar, Punjab' }],
     locations: [{ id: 'l1', name: 'Main Stock', shortCode: 'STOCK', warehouseRef: 'w1' }, { id: 'l2', name: 'Rack A', shortCode: 'RACK-A', warehouseRef: 'w1' }, { id: 'l3', name: 'Production Floor', shortCode: 'FLOOR', warehouseRef: 'w2' }],
